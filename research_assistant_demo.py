@@ -1,57 +1,72 @@
 import streamlit as st
 import requests
 from bs4 import BeautifulSoup
+from openai import OpenAI
 
 # Load API key from Streamlit secrets
-GROQ_API_KEY = st.secrets["GROQ_API_KEY"]
+OPENAI_API_KEY = st.secrets["OPENAI_API_KEY"]
 
-st.title("Research Assistant with Grok API")
+client = OpenAI(api_key=OPENAI_API_KEY)
+
+st.title("Research Assistant (Free Version)")
 
 query = st.text_input("Enter your research question:")
 
 if st.button("Search & Summarize"):
     if not query:
-        st.warning("Please enter a question!")
-    else:
-        st.info("🔎 Searching the web...")
+        st.warning("Please type something.")
+        st.stop()
 
-        # DuckDuckGo search
-        search_url = f"https://html.duckduckgo.com/html/?q={query}"
-        headers = {"User-Agent": "Mozilla/5.0"}
-        try:
-            response = requests.get(search_url, headers=headers)
-            response.raise_for_status()
-        except Exception as e:
-            st.error(f"Failed to fetch search results: {e}")
-            st.stop()
+    st.info("🔎 Searching DuckDuckGo...")
 
-        soup = BeautifulSoup(response.text, "html.parser")
-        results = [a.get_text() for a in soup.find_all("a", {"class": "result__a"})][:5]
+    # Use DuckDuckGo HTML Search (FREE, NO API KEY NEEDED)
+    search_url = f"https://html.duckduckgo.com/html/?q={query}"
+    headers = {"User-Agent": "Mozilla/5.0"}
 
-        if not results:
-            st.warning("No results found.")
-        else:
-            st.write("### Top 5 Search Snippets")
-            for i, r in enumerate(results, 1):
-                st.write(f"**{i}.** {r}")
+    try:
+        r = requests.get(search_url, headers=headers)
+        r.raise_for_status()
+    except Exception as e:
+        st.error(f"Search error: {e}")
+        st.stop()
 
-            combined_text = " ".join(results)
-            st.info("🧠 Summarizing using Grok API...")
+    soup = BeautifulSoup(r.text, "html.parser")
 
-            # Call Grok API
-            grok_url = "https://api.grok.com/v1/generate"  # Replace with actual endpoint
-            headers = {"Authorization": f"Bearer {GROQ_API_KEY}"}
-            payload = {
-                "prompt": f"Summarize the following content in clear points:\n{combined_text}",
-                "max_tokens": 300
-            }
+    results = []
+    for a in soup.select("a.result__a"):
+        text = a.get_text(strip=True)
+        if text:
+            results.append(text)
 
-            try:
-                r = requests.post(grok_url, headers=headers, json=payload)
-                r.raise_for_status()
-                summary = r.json().get("text", "No summary returned")
-            except Exception as e:
-                summary = f"Error calling Grok API: {e}"
+    results = results[:5]  # top 5 results
 
-            st.write("### AI Summary")
-            st.write(summary)
+    if not results:
+        st.warning("No results found — try a different question.")
+        st.stop()
+
+    st.write("### 🔎 Top Search Results")
+    for i, res in enumerate(results, 1):
+        st.write(f"**{i}.** {res}")
+
+    combined = " ".join(results)
+
+    st.info("🧠 Summarizing using ChatGPT… (Free API)")
+
+    # ==== ChatGPT Summarizer ====
+    try:
+        completion = client.chat.completions.create(
+            model="gpt-4o-mini",   # free model
+            messages=[
+                {"role": "user", 
+                 "content": f"Summarize the following search results clearly:\n{combined}"}
+            ],
+            max_tokens=250
+        )
+
+        summary = completion.choices[0].message.content
+
+    except Exception as e:
+        summary = f"Error calling ChatGPT: {e}"
+
+    st.write("### 📝 AI Summary")
+    st.write(summary)
