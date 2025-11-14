@@ -6,7 +6,7 @@ from dotenv import load_dotenv
 
 # Load API key
 load_dotenv()
-GROQ_API_KEY = "YOUR_API_KEY_HERE"
+GROQ_API_KEY = os.getenv("GROQ_API_KEY")
 
 st.title("Research Assistant with Grok API")
 
