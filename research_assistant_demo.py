@@ -1,12 +1,9 @@
 import streamlit as st
 import requests
 from bs4 import BeautifulSoup
-import os
-from dotenv import load_dotenv
 
-# Load API key
-load_dotenv()
-GROQ_API_KEY = os.getenv("GROQ_API_KEY")
+# Load API key from Streamlit secrets
+GROQ_API_KEY = st.secrets["GROQ_API_KEY"]
 
 st.title("Research Assistant with Grok API")
 
@@ -18,32 +15,43 @@ if st.button("Search & Summarize"):
     else:
         st.info("🔎 Searching the web...")
 
-        # 1. DuckDuckGo search (simple scraping)
+        # DuckDuckGo search
         search_url = f"https://html.duckduckgo.com/html/?q={query}"
         headers = {"User-Agent": "Mozilla/5.0"}
-        response = requests.get(search_url, headers=headers)
+        try:
+            response = requests.get(search_url, headers=headers)
+            response.raise_for_status()
+        except Exception as e:
+            st.error(f"Failed to fetch search results: {e}")
+            st.stop()
+
         soup = BeautifulSoup(response.text, "html.parser")
         results = [a.get_text() for a in soup.find_all("a", {"class": "result__a"})][:5]
 
-        st.write("### Top 5 Search Snippets")
-        for i, r in enumerate(results, 1):
-            st.write(f"**{i}.** {r}")
+        if not results:
+            st.warning("No results found.")
+        else:
+            st.write("### Top 5 Search Snippets")
+            for i, r in enumerate(results, 1):
+                st.write(f"**{i}.** {r}")
 
-        # 2. Combine snippets
-        combined_text = " ".join(results)
+            combined_text = " ".join(results)
+            st.info("🧠 Summarizing using Grok API...")
 
-        st.info("🧠 Summarizing using Grok API...")
+            # Call Grok API
+            grok_url = "https://api.grok.com/v1/generate"  # Replace with actual endpoint
+            headers = {"Authorization": f"Bearer {GROQ_API_KEY}"}
+            payload = {
+                "prompt": f"Summarize the following content in clear points:\n{combined_text}",
+                "max_tokens": 300
+            }
 
-        # 3. Call Grok API
-        grok_url = "https://api.grok.com/v1/generate"  # Replace with actual endpoint
-        headers = {"Authorization": f"Bearer {GROK_API_KEY}"}
-        payload = {
-            "prompt": f"Summarize the following content in clear points:\n{combined_text}",
-            "max_tokens": 300
-        }
+            try:
+                r = requests.post(grok_url, headers=headers, json=payload)
+                r.raise_for_status()
+                summary = r.json().get("text", "No summary returned")
+            except Exception as e:
+                summary = f"Error calling Grok API: {e}"
 
-        r = requests.post(grok_url, headers=headers, json=payload)
-        summary = r.json().get("text", "No summary returned")
-
-        st.write("### AI Summary")
-        st.write(summary)
+            st.write("### AI Summary")
+            st.write(summary)
