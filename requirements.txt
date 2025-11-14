@@ -1,9 +1,15 @@
+# Add this at the top to ensure pip is updated
+pip>=23.2
+
+# Streamlit
 streamlit==1.31.1
+
+# Common dependencies
 pandas
 numpy
 requests
 Pillow==10.3.0
 
-
-torch==2.9.1
+# Hugging Face
 transformers==4.30.2
+tokenizers==0.13.2
