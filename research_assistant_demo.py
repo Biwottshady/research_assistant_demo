@@ -1,58 +1,49 @@
-import os
-os.environ["KMP_DUPLICATE_LIB_OK"] = "TRUE"
-
 import streamlit as st
-import pandas as pd
-from transformers import pipeline
+import requests
+from bs4 import BeautifulSoup
+import os
+from dotenv import load_dotenv
 
-# -------------------------------
-# 1. Streamlit UI: User Query
-# -------------------------------
-st.title("Research Assistant Demo (Free Version)")
+# Load API key
+load_dotenv()
+GROQ_API_KEY = "YOUR_API_KEY_HERE"
+
+st.title("Research Assistant with Grok API")
+
 query = st.text_input("Enter your research question:")
 
-if query:
-    st.write("🔎 Searching for relevant information...")
+if st.button("Search & Summarize"):
+    if not query:
+        st.warning("Please enter a question!")
+    else:
+        st.info("🔎 Searching the web...")
 
-    # -------------------------------
-    # 2. Simulated Search Results
-    # -------------------------------
-    # Replace with real API later if desired
-    search_results = [
-        "Article 1: Key insights about AI in education. AI can improve learning outcomes.",
-        "Article 2: Study on LLMs improving research workflows. Automation can save time.",
-        "Article 3: Using Python for automating research tasks and analyzing data efficiently."
-    ]
+        # 1. DuckDuckGo search (simple scraping)
+        search_url = f"https://html.duckduckgo.com/html/?q={query}"
+        headers = {"User-Agent": "Mozilla/5.0"}
+        response = requests.get(search_url, headers=headers)
+        soup = BeautifulSoup(response.text, "html.parser")
+        results = [a.get_text() for a in soup.find_all("a", {"class": "result__a"})][:5]
 
-    # Display search results in table
-    st.subheader("Search Results")
-    df = pd.DataFrame(search_results, columns=["Articles"])
-    st.dataframe(df)
+        st.write("### Top 5 Search Snippets")
+        for i, r in enumerate(results, 1):
+            st.write(f"**{i}.** {r}")
 
-    # -------------------------------
-    # 3. Summarization using Hugging Face
-    # -------------------------------
-    st.write("🧠 Summarizing content using a free model...")
+        # 2. Combine snippets
+        combined_text = " ".join(results)
 
-    summarizer = pipeline("summarization", model="facebook/bart-large-cnn")
-    combined_text = " ".join(search_results)
-    
-    # Hugging Face models have a max token limit, so we truncate if too long
-    if len(combined_text.split()) > 500:
-        combined_text = " ".join(combined_text.split()[:500])
+        st.info("🧠 Summarizing using Grok API...")
 
-    summary_list = summarizer(combined_text, max_length=120, min_length=30, do_sample=False)
-    summary = summary_list[0]['summary_text']
+        # 3. Call Grok API
+        grok_url = "https://api.grok.com/v1/generate"  # Replace with actual endpoint
+        headers = {"Authorization": f"Bearer {GROK_API_KEY}"}
+        payload = {
+            "prompt": f"Summarize the following content in clear points:\n{combined_text}",
+            "max_tokens": 300
+        }
 
-    # -------------------------------
-    # 4. Overview / Dashboard
-    # -------------------------------
-    st.subheader("AI Summary (Free)")
-    st.write(summary)
+        r = requests.post(grok_url, headers=headers, json=payload)
+        summary = r.json().get("text", "No summary returned")
 
-    # Optional: Simple keyword visualization
-    st.subheader("Keyword Frequency (Demo)")
-    keywords = ["AI", "LLM", "automation", "Python", "research"]
-    freq = [combined_text.count(k) for k in keywords]
-    keyword_df = pd.DataFrame({"Keyword": keywords, "Frequency": freq})
-    st.bar_chart(keyword_df.set_index("Keyword"))
+        st.write("### AI Summary")
+        st.write(summary)
