@@ -1,11 +1,9 @@
 import streamlit as st
 import requests
 
-st.title("🔎 Research Assistant ")
+st.title("🔎 Research Assistant (Free Wikipedia Search + AI Summary)")
 
-# ---------------------------------------------------
-# 1. Wikipedia FREE Search (no API key required)
-# ---------------------------------------------------
+# ------------------ WIKIPEDIA SEARCH ------------------
 def search_wikipedia(query):
     url = "https://en.wikipedia.org/w/api.php"
     params = {
@@ -14,19 +12,26 @@ def search_wikipedia(query):
         "srsearch": query,
         "format": "json"
     }
+    headers = {"User-Agent": "Mozilla/5.0 (ResearchAssistant/1.0)"}
 
-    response = requests.get(url, params=params)
-    data = response.json()
+    response = requests.get(url, params=params, headers=headers)
 
-    # Extract top 5 snippets
-    return [item["snippet"].replace("<span class=\"searchmatch\">", "")
-                             .replace("</span>", "")
-            for item in data["query"]["search"]][:5]
+    try:
+        data = response.json()   # THIS IS WHAT FAILED EARLIER
+    except Exception as e:
+        st.error("Wikipedia returned invalid JSON. Try a different search.")
+        return []
+
+    # Extract top 5 summaries
+    return [
+        item["snippet"]
+        .replace("<span class=\"searchmatch\">", "")
+        .replace("</span>", "")
+        for item in data.get("query", {}).get("search", [])
+    ][:5]
 
 
-# ---------------------------------------------------
-# 2. AI Summarizer using ChatGPT-Free API
-# ---------------------------------------------------
+# ------------------ AI SUMMARY (ChatGPT Free) ------------------
 def summarize_text(text):
     url = "https://api.openai.com/v1/responses"
     headers = {
@@ -40,17 +45,19 @@ def summarize_text(text):
     }
 
     r = requests.post(url, json=payload, headers=headers)
-    return r.json()["output_text"]
+
+    try:
+        return r.json()["output_text"]
+    except:
+        return "⚠ AI summarizer failed to respond."
 
 
-# ---------------------------------------------------
-# UI
-# ---------------------------------------------------
+# ------------------ UI ------------------
 query = st.text_input("Enter your research question:")
 
 if st.button("Search & Summarize"):
     if not query:
-        st.warning("Please type something.")
+        st.warning("Please type something first.")
         st.stop()
 
     st.info("🔍 Searching Wikipedia…")
